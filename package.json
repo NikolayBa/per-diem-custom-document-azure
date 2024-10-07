@@ -1,0 +1,26 @@
+{
+  "name": "per-diem-custom-document-azure",
+  "version": "1.0.0",
+  "description": "",
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc -w",
+    "clean": "rimraf dist",
+    "prestart": "npm run clean && npm run build",
+    "start": "func start",
+    "test": "echo \"No tests yet...\""
+  },
+  "dependencies": {
+    "@azure/functions": "^4.0.0",
+    "@azure/msal-node": "^2.15.0",
+    "msal-node": "^0.0.1-security"
+  },
+  "devDependencies": {
+    "@types/node": "^20.x",
+    "axios": "^1.6.8",
+    "rimraf": "^5.0.0",
+    "stream-to-array": "^2.3.0",
+    "typescript": "^5.6.2"
+  },
+  "main": "dist/src/{index.js,functions/*.js}"
+}
