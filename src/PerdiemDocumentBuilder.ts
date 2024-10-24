@@ -1,28 +1,29 @@
 import axios, { AxiosResponse } from 'axios';
+var toArray = require('stream-to-array');
+
 import * as fs from 'fs';
 import * as path from 'path';
 import { ConfidentialClientApplication } from '@azure/msal-node';
-var toArray = require('stream-to-array');
 
-const ACCOUNT_ID = "ACCOUNT_KEY";
-const PAYHAWK_API_KEY = "API_KEY";
+const ACCOUNT_ID = "";
+const PAYHAWK_API_KEY = "";
+const WEBHOOK_EVENT_NAME = "expense.reviewed";
 const PAYHAWK_API_BASE_URL = `https://api.payhawk.com/api/v3/accounts/${ACCOUNT_ID}`;
-const MSAL_CONFIG = {
+
+const driveId = '';
+const templateFileId = '';
+const realFilesFolderId = '';
+
+const msalConfig = {
   auth: {
-    clientId: 'CLIENT_ID', // Replace with your client ID
-    authority: 'https://login.microsoftonline.com/{Tenant_ID}', // Replace with your tenant ID
-    clientSecret: 'CLIENT_SECRET' // Replace with your client secret
+    clientId: '', // Replace with your client ID
+    authority: 'https://login.microsoftonline.com/', // Replace with your tenant ID
+    clientSecret: '' // Replace with your client secret
   }
 };
 
-const folderUrl = 'https://example-my.sharepoint.com/personal/Documents'; // SharePoint folder URL
-
-const customFieldTeam = '';
-const customFieldReason = '';
-const customFieldTransport = '';
-const customFieldTitle = ''
-
-const WEBHOOK_EVENT_NAME = "expense.reviewed";
+const folderUrl = ''; // SharePoint folder URL
+const GRAPH_API_BASE_URL = 'https://graph.microsoft.com/v1.0';
 const PHLDR_EXPENSE_ID = 'expense_id';                      //ID of the expense with 5 trailing zeros
 const PHLDR_FROM_DATE = 'from_date';                        //First day of the business trip in format dd.mm.yyyy
 const PHLDR_TO_DATE = 'to_date';                            //Last day of the business trip in format dd.mm.yyyy
@@ -37,8 +38,9 @@ const PHLDR_TRANSPORT_TYPE = 'transport_type';              //Value from custom 
 const PHLDR_WORK_TITLE = 'work_title';                      //Value from custom field - Длъжност
 const PHLDR_TRIP_TOTAL_AMOUNT = 'trip_total_amount';        //The total amount and currency for the trip
 
+
 // Initialize MSAL client
-const cca = new ConfidentialClientApplication(MSAL_CONFIG);
+const cca = new ConfidentialClientApplication(msalConfig);
 
 export class PerDiemDocumentBuilder {
 
@@ -62,10 +64,11 @@ export class PerDiemDocumentBuilder {
 
   async generatePerDiemDocument(expenseId: string, regenerateIfExists: boolean): Promise<string> {
     try {
-      //Get expense
+      // Get expense
+
       const expense = await this.getExpense(expenseId);
 
-      //If the expense is not of type perDiem - abort
+      // If the expense is not of type perDiem - abort
       if (expense.type !== 'perDiem') {
         return 'Expense is not a per-diem.';
       }
@@ -74,25 +77,54 @@ export class PerDiemDocumentBuilder {
         return 'Custom per-diem form already generated for this expense.';
       }
 
-      //Get expense data
+      // Get expense data
       const expenseData = await this.getExpenseData(expense);
-      const downloadFile = await this.downloadFile("Business_trip order_template")
 
-      //TODO
+      const accessToken = await this.getAccessToken();
+
+      const newFileName = `Per Diem For ${expenseId}.docx`;
+      console.log(newFileName);
+      // Copy and rename the file
+      const newFile = await this.copyAndRenameFile(
+        driveId,
+        templateFileId,
+        realFilesFolderId,
+        newFileName,
+        accessToken,
+      );
+
+      // Replace placeholders in the copied file
+      const placeholders = {
+        expense_id: expense.id,
+        expense_created_date: expense.createdAt,
+        employee_name: expense.createdBy,
+        employee_parent_team: expenseData.PHLDR_EMPLOYEE_TEAM,
+        destination: expenseData.PHLDR_DESTINATION,
+        trip_reason: expenseData.PHLDR_TRIP_REASON,
+        from_date: expenseData.PHLDR_FROM_DATE,
+        to_date: expenseData.PHLDR_TO_DATE,
+        approver_name: expenseData.PHLDR_APPROVER_NAME,
+      };
+
+      await this.replacePlaceholdersInFile(
+        driveId,
+        realFilesFolderId,
+        templateFileId,
+        placeholders,
+        accessToken
+      );
+
       //const newFileId = await this.copyTamplateFile(expenseData);
 
-      //TODO
       //Replace placeholders in the copied template with the correct data
       //await this.replaceTextInDoc(newFileId, expenseData);
 
-      //TODO
       //Get the file as PDF
       //const pdf:any = await this.exportFileAsPdf(newFileId);
       //const arr = await toArray(pdf.data);
       //const buffers = arr.map(part:any => util.isBuffer(part) ? part : Buffer.from(part));
       //const b:Buffer = Buffer.concat(arr);
 
-      //TODO
       //Attach the document to the expense in Payhawk
       //const documentResponse = await this.uploadDocumentToPayhawk(expenseId, b);
 
@@ -109,10 +141,9 @@ export class PerDiemDocumentBuilder {
   }
 
   private async replaceTextInDoc(copiedTemplateFileId: string, replaceObject: any): Promise<void> {
-    // TO_DOs
   }
 
-  private async exportFileAsPdf(fileId: string): Promise<void> {
+  private async exportFileAsPdf(googleDriveFileId: string): Promise<void> {
     // https://learn.microsoft.com/en-us/graph/api/driveitem-get-content-format?view=graph-rest-1.0&tabs=http
   }
 
@@ -185,17 +216,14 @@ export class PerDiemDocumentBuilder {
       const customFields: [any] = expense.reconciliation.customFields;
       customFields.forEach(customField => {
         switch (customField.id) {
-          case customFieldTeam: //Employee team and parent team
+          case 'teams': //Employee team and parent team
             result[PHLDR_EMPLOYEE_TEAM] = customField.selectedValues[0].label;
             result[PHLDR_EMPLOYEE_PARENT_TEAM] = customField.selectedValues.length === 2 ? customField.selectedValues[1].label : '';
             break;
-          case customFieldTitle: //Employee work title
-            result[PHLDR_WORK_TITLE] = customField.selectedValues[0].label;
-            break;
-          case customFieldReason: //Trip reason
+          case PHLDR_TRIP_REASON: //Trip reason
             result[PHLDR_TRIP_REASON] = customField.selectedValues[0].label;
             break;
-          case customFieldTransport: //Transport type
+          case PHLDR_TRANSPORT_TYPE: //Transport type
             result[PHLDR_TRANSPORT_TYPE] = customField.selectedValues[0].label;
             break;
           default:
@@ -353,6 +381,115 @@ export class PerDiemDocumentBuilder {
       }
     } catch (error) {
       console.error('Error uploading file:', error);
+    }
+  }
+
+  async copyAndRenameFile(
+    siteId: string,
+    templateFileId: string,
+    realFilesFolderId: string,
+    newFileName: string,
+    accessToken: string
+  ): Promise<string> {
+    try {
+      // Get the file metadata from the Templates folder
+      const fileResponse = await axios.get(
+        `${GRAPH_API_BASE_URL}/drives/${siteId}/items/${templateFileId}`,
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+        }
+      );
+
+      const fileId = fileResponse.data.id;
+
+      // Copy the file to the Real Files folder
+      const copyResponse = await axios.post(
+        `${GRAPH_API_BASE_URL}/drives/${siteId}/items/${templateFileId}/copy`,
+        {
+          parentReference: {
+            driveId: siteId,
+            id: realFilesFolderId,
+          },
+          name: newFileName,
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+        }
+      );
+
+      console.log('File copied successfully:', copyResponse);
+
+      return newFileName;
+    } catch (error) {
+      console.error('Error copying file:', error);
+      throw error;
+    }
+  }
+
+  // Function to replace placeholders in a .docx file with given values
+  async replacePlaceholdersInFile(
+    siteId: string,
+    realFilesFolderId: string,
+    templateFileId: string,
+    placeholders: { [key: string]: string },
+    accessToken: string
+  ): Promise<void> {
+    try {
+      // Get file content as binary
+      const fileResponse = await axios.get(
+        `${GRAPH_API_BASE_URL}/drives/${siteId}/items/${templateFileId}/content`,
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          },
+          responseType: 'arraybuffer',
+        }
+      );
+
+      let fileBuffer = Buffer.from(fileResponse.data);
+
+      // Assuming you are using a library like `docxtemplater` to modify the .docx content.
+      // You will need to install and import it.
+      const PizZip = require('pizzip');
+      const Docxtemplater = require('docxtemplater');
+
+      let zip = new PizZip(fileBuffer);
+      let doc = new Docxtemplater(zip);
+
+      // Replace placeholders
+      doc.setData(placeholders);
+
+      try {
+        doc.render();
+      } catch (error) {
+        console.error('Error rendering document:', error);
+        throw error;
+      }
+
+      // Generate the updated document
+      const updatedDocBuffer = doc.getZip().generate({ type: 'nodebuffer' });
+
+      // Upload the modified file back to the Real Files folder
+      await axios.put(
+        `${GRAPH_API_BASE_URL}/drives/${siteId}/items/${templateFileId}/content`,
+        updatedDocBuffer,
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          },
+        }
+      );
+
+      console.log('File updated successfully:', templateFileId);
+    } catch (error) {
+      console.error('Error replacing placeholders in file:', error);
+      throw error;
     }
   }
 }
