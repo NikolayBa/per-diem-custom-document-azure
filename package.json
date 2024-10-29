@@ -15,11 +15,11 @@
     "@azure/msal-node": "^2.15.0",
     "docxtemplater": "^3.51.0",
     "msal-node": "^0.0.1-security",
+    "node-fetch": "^2.7.0",
     "pizzip": "^3.1.7"
   },
   "devDependencies": {
     "@types/node": "^20.x",
-    "axios": "^1.6.8",
     "rimraf": "^5.0.0",
     "stream-to-array": "^2.3.0",
     "typescript": "^5.6.2"
