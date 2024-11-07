@@ -1,28 +1,28 @@
 import { app, HttpRequest, HttpResponseInit, InvocationContext } from "@azure/functions";
 import { ConfidentialClientApplication } from '@azure/msal-node';
 
-const ACCOUNT_ID = ""; //Replace with account Id
-const PAYHAWK_API_KEY = ""; //Replace with API Key
+const ACCOUNT_ID = ""; //Replace with Payhawk account Id
+const PAYHAWK_API_KEY = ""; //Replace with Payhawk API Key
 const PAYHAWK_API_BASE_URL = `https://api.payhawk.com/api/v3/accounts/${ACCOUNT_ID}`;
 
 const driveId = ''; // Replace with Sharepoint Drive ID
-const templateFileId = ''; // Replace with Template File ID
-const realFilesFolderId = ''; // Replace with folder ID
+const templateFileId = ''; // Replace with Template File ID in Sharepoint
+const realFilesFolderId = ''; // Replace with SharePoint folder ID where the generated documents are stored in Sharepoint
 
 const msalConfig = {
     auth: {
-        clientId: '', // Replace with your client ID
-        authority: 'https://login.microsoftonline.com/TENANT', // Replace with your tenant ID
-        clientSecret: '' // Replace with your client secret
+        clientId: '', // Replace with your client ID from Azure 
+        authority: 'https://login.microsoftonline.com/TENANT', // Replace with your tenant ID from Azure
+        clientSecret: '' // Replace with your client secret from Azure 
     }
 };
 
-const PHLDR_TRIP_REASON = 'trip_reason';                    // Replace with Custom Field Value 
-const PHLDR_TRANSPORT_TYPE = 'transport_type';              // Replace with Custom Field Value
+const PHLDR_TRIP_REASON = 'trip_reason_123456';                    // Replace with Custom Field id 
+const PHLDR_TRANSPORT_TYPE = 'transport_type_123456';              // Replace with Custom Field id
 // add more if needed 
 
 const GRAPH_API_BASE_URL = 'https://graph.microsoft.com/v1.0';
-const PHLDR_EXPENSE_ID = 'expense_id';                      //ID of the expense with 5 trailing zeros
+const PHLDR_EXPENSE_ID = 'expense_id';                      //ID of the expense 
 const PHLDR_FROM_DATE = 'from_date';                        //First day of the business trip in format dd.mm.yyyy
 const PHLDR_TO_DATE = 'to_date';                            //Last day of the business trip in format dd.mm.yyyy
 const PHLDR_DESTINATION = 'destination';                    //The destination of the trip
@@ -46,7 +46,7 @@ export async function payhawkWebhook(request: HttpRequest, context: InvocationCo
     }
 
     try {
-        //Get Expense
+        // Get Expense
         const expense = await getExpense(expenseId);
         const expenseData = await getExpenseData(expense);
 
